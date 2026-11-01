@@ -36,6 +36,14 @@ export async function connectToMongoDB() {
 
 const db = client.db('studio-space-a8');
 
+app.post('/add-studio', async (req, res) => {
+  try {
+    const { name, location } = req.body;
+  } catch (err) {
+    console.error('Error adding studio:', err);
+    res.status(500).json({ error: 'Failed to add studio' });
+  }
+});
 
 
 app.get('/', (req, res) => {
