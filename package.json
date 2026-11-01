@@ -8,7 +8,7 @@
   },
   "author": "Md Shoayeb mizi",
   "license": "ISC",
-  "types": "module",
+  "type": "module",
   "dependencies": {
     "cors": "^2.8.6",
     "dotenv": "^18.0.9",
