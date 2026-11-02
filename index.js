@@ -10,7 +10,7 @@ const app = express();
 // Only the Next.js dev origin needs to talk to this server.
 app.use(
   cors({
-    origin: ["http://localhost:3000"],
+    origin: [process.env.CLIENT_URL],
   }),
 );
 
@@ -18,7 +18,7 @@ app.use(
 // so the JSON body can be large.
 app.use(express.json({ limit: "30mb" }));
 
-const PORT = process.env.PORT || 5000;
+const PORT = 5000;
 
 /* MongoDB                                                             */
 
@@ -62,10 +62,57 @@ function serializeStudio(body) {
   };
 }
 
+//Data is not posting in to the database properly, so this function is used to normalize the data before sending it to the client. [This is from AI]
+
+function normalizeStudio(studio) {
+  const location = studio.location ?? {};
+  const pricing = studio.pricing ?? {};
+  const capacity = studio.capacity ?? {};
+  const media = studio.media ?? {};
+  const ratings = studio.ratings_and_reviews ?? {};
+  const hourlyRate = studio.hourlyRate ?? pricing.hourly_rate ?? studio.price ?? 0;
+  const maxCapacity = studio.maxCapacity ?? capacity.max_capacity ?? studio.capacity ?? 0;
+  const createdAt = studio.createdAt ?? studio.created_at ?? studio._id?.getTimestamp?.() ?? new Date(0);
+
+  return {
+    _id: studio._id,
+    id: studio.id ?? studio.slug ?? String(studio._id),
+    name: studio.name ?? studio.title ?? "",
+    category: studio.category ?? "",
+    shortDescription: studio.shortDescription ?? studio.short_description ?? "",
+    fullDescription: studio.fullDescription ?? studio.description ?? "",
+    country: studio.country ?? location.country ?? "",
+    city: studio.city ?? location.city ?? "",
+    streetAddress: studio.streetAddress ?? location.address ?? "",
+    latitude: studio.latitude ?? location.latitude,
+    longitude: studio.longitude ?? location.longitude,
+    hourlyRate: Number(hourlyRate) || 0,
+    price: Number(hourlyRate) || 0,
+    securityDeposit: Number(studio.securityDeposit ?? pricing.security_deposit) || 0,
+    maxCapacity: Number(maxCapacity) || 0,
+    capacity: Number(maxCapacity) || 0,
+    rules: studio.rules ?? "",
+    cancellationPolicy: studio.cancellationPolicy ?? studio.cancellation_policy ?? "",
+    amenities: Array.isArray(studio.amenities) ? studio.amenities : [],
+    equipment: Array.isArray(studio.equipment) ? studio.equipment : [],
+    coverImage: studio.coverImage ?? media.cover_image ?? null,
+    gallery: Array.isArray(studio.gallery)
+      ? studio.gallery
+      : Array.isArray(media.gallery)
+        ? media.gallery
+        : [],
+    rating: Number(studio.rating ?? ratings.average_rating) || 0,
+    reviews: Number(studio.reviews ?? ratings.review_count) || 0,
+    status: studio.status ?? (studio.is_verified ? "Verified" : "Pending"),
+    createdAt,
+    updatedAt: studio.updatedAt ?? studio.updated_at ?? createdAt,
+  };
+}
+
 /* Routes                                                              */
 
 app.get("/", (req, res) => {
-  res.send("This is from Server");
+  res.send({ message: "Studio Space Server is running." });
 });
 
 // Health check used by the client to show a friendly offline message.
@@ -115,10 +162,10 @@ app.post("/add-studio", async (req, res) => {
 app.get("/studios", async (req, res) => {
   try {
     const studios = await studiosCollection
-      .find()
+      .find({ status: { $in: ["published", "Published", "Verified", "verified"] } })
       .sort({ createdAt: -1 })
       .toArray();
-    res.json(studios);
+    res.json(studios.map(normalizeStudio));
   } catch (err) {
     console.error("Error fetching studios:", err);
     res.status(500).json({ error: "Failed to fetch studios" });
@@ -143,7 +190,7 @@ app.get("/studios/:id", async (req, res) => {
       return res.status(404).json({ error: "Studio not found" });
     }
 
-    res.json(studio);
+    res.json(normalizeStudio(studio));
   } catch (err) {
     console.error("Error fetching studio:", err);
     res.status(500).json({ error: "Failed to fetch studio" });
@@ -158,6 +205,12 @@ app.use((req, res) => {
 
 app.use((err, req, res, next) => {
   console.error("Unhandled server error:", err);
+  if (err.status === 413) {
+    return res.status(413).json({
+      error: "Uploaded images are too large. Choose smaller images and try again.",
+    });
+  }
+
   res.status(500).json({ error: "Internal server error" });
 });
 
