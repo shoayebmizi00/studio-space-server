@@ -163,13 +163,23 @@ app.post("/add-studio", async (req, res) => {
 
 /**
  * List published studios (for the dashboard / future marketplace integration).
+ * Optional query: ?limit=6 returns only the newest N studios (used by the
+ * "Featured this week" section on the home page).
  */
 app.get("/studios", async (req, res) => {
   try {
-    const studios = await studiosCollection
+    const rawLimit = Number.parseInt(String(req.query.limit ?? ""), 10);
+    const limit =
+      Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 100) : undefined;
+
+    let cursor = studiosCollection
       .find({ status: { $in: ["published", "Published", "Verified", "verified"] } })
-      .sort({ createdAt: -1 })
-      .toArray();
+      .sort({ createdAt: -1 });
+    if (limit) {
+      cursor = cursor.limit(limit);
+    }
+
+    const studios = await cursor.toArray();
     res.json(studios.map(normalizeStudio));
   } catch (err) {
     console.error("Error fetching studios:", err);
