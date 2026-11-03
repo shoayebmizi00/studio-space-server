@@ -10,11 +10,11 @@ const app = express();
 // Allow Next.js client origins (clean trailing semicolons/slashes).
 const allowedClient = process.env.CLIENT_URL
   ? process.env.CLIENT_URL.trim().replace(/;+$/, "").replace(/\/+$/, "")
-  : "http://localhost:3000";
+  : `${process.env.CLIENT_URL}`;
 
 app.use(
   cors({
-    origin: [allowedClient, "http://localhost:3000", "http://127.0.0.1:3000"],
+    origin: [allowedClient, `${process.env.CLIENT_URL}`, "http://127.0.0.1:3000"],
     credentials: true,
   }),
 );
